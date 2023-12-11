@@ -1,0 +1,34 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import sys
+
+from sionna.utils import BinarySource, QAMSource, ebnodb2no, compute_ser, compute_ber, PlotBER
+from sionna.channel import FlatFadingChannel, KroneckerModel
+from sionna.channel.utils import exp_corr_mat
+from sionna.mimo import lmmse_equalizer
+from sionna.mapping import SymbolDemapper, Mapper, Demapper
+from sionna.fec.ldpc.encoding import LDPC5GEncoder
+from sionna.fec.ldpc.decoding import LDPC5GDecoder
+
+num_tx_ant = 4
+num_rx_ant = 16
+num_bits_per_symbol = 4
+batch_size = 1024
+qam_source = QAMSource(num_bits_per_symbol)
+x = qam_source([batch_size, num_tx_ant])
+print(x.shape)
+
+channel = FlatFadingChannel(num_tx_ant, num_rx_ant, add_awgn=True, return_channel=True)
+no = 0.2 # Noise variance of the channel
+
+# y and h are the channel output and channel realizations, respectively.
+y, h = channel([x, no])
+print(y.shape)
+print(h.shape)
+
+s = tf.cast(no*tf.eye(num_rx_ant, num_rx_ant), y.dtype)
+x_hat, no_eff = lmmse_equalizer(y, h, s)
+
+plt.axes().set_aspect(1.0)
+plt.scatter(np.real(x_hat), np.imag(x_hat))
+plt.scatter(np.real(x), np.imag(x))

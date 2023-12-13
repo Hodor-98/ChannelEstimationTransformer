@@ -140,13 +140,14 @@ for batch in range(num_of_batches):
 
         # Extract every 75th element from the 5th dimension
         ChannelTF_subbatch = h_hat[:, 0, :, 0,  :, ::75, 0]
-        ChannelTF_subbatch = tf.transpose(ChannelTF_subbatch, perm=[3,0,2,1])
+        ChannelTF_subbatch = tf.transpose(ChannelTF_subbatch, perm=[0,3,1,2])
         ChannelNP_subbatch = ChannelTF_subbatch.numpy()
         
         if(subbatch == 0):
             ChannelNP = ChannelNP_subbatch
         else:
             ChannelNP = np.append(ChannelNP, ChannelNP_subbatch, axis=0) 
+        print(ChannelNP.shape)
 
     
 

@@ -1,0 +1,4 @@
+  File "/cm/local/apps/slurm/var/spool/job879633/slurm_script", line 25
+    mkdir ${SLURM_JOBID}
+          ^
+SyntaxError: invalid syntax

@@ -110,7 +110,6 @@ testpath = 'CDL-B/test'
 testData =  SeqData(testpath,  prev_len=args.seq_len,  pred_len=args.pred_len, mode='test', SNR = 14, ir = args.ir_test, samples= args.samples,v_min = args.v_min, v_max = args.v_max)
 test_loader = DataLoader(dataset = testData, batch_size = args.batch, shuffle = False, 
                           num_workers = 4., drop_last = False, pin_memory = True)
-
 data, _, data_prev, data_pred = testData[0]
 L, M, Nr, Nt = data.shape
 

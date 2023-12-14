@@ -1,4 +1,10 @@
-  File "/cm/local/apps/slurm/var/spool/job879633/slurm_script", line 25
-    mkdir ${SLURM_JOBID}
-          ^
-SyntaxError: invalid syntax
+Traceback (most recent call last):
+  File "/cm/local/apps/slurm/var/spool/job886000/slurm_script", line 11, in <module>
+    import torch
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/__init__.py", line 191, in <module>
+    _load_global_deps()
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/__init__.py", line 153, in _load_global_deps
+    ctypes.CDLL(lib_path, mode=ctypes.RTLD_GLOBAL)
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/ctypes/__init__.py", line 382, in __init__
+    self._handle = _dlopen(self._name, mode)
+OSError: /home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/lib/../../nvidia/cublas/lib/libcublas.so.11: symbol cublasLtGetStatusString, version libcublasLt.so.11 not defined in file libcublasLt.so.11 with link time reference

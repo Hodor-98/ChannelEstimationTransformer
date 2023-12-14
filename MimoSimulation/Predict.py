@@ -36,7 +36,7 @@ embed = 'fixed'
 activation = 'gelu'
 output_attention = True
 distil = True
-device = 'cpu'  # Example value, replace this with your device choice
+device = 'cuda'  # Example value, replace this with your device choice
 data = '0'
 
 

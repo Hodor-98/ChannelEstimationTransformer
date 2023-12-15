@@ -1,7 +1,0 @@
-True
-Traceback (most recent call last):
-  File "/home/tue/20162638/ChannelEstimationTransformer/transformer_code_final/prediciton_code/test_transformer_lstm_AR.py", line 35, in <module>
-    force_cudnn_initialization()
-  File "/home/tue/20162638/ChannelEstimationTransformer/transformer_code_final/prediciton_code/test_transformer_lstm_AR.py", line 33, in force_cudnn_initialization
-    torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
-RuntimeError: cuDNN error: CUDNN_STATUS_NOT_INITIALIZED

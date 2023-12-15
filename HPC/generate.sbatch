@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=GenerateChannels
-#SBATCH --output=GenerateChannels_output_%j.txt
+#SBATCH --output=log/GenerateChannels_output_%j.txt
 #SBATCH --partition=elec.gpu-es02.q
 #SBATCH --gres=gpu:1
 
@@ -10,4 +10,4 @@ module load cuda11.5/toolkit/11.5.1 cuda11.5/profiler/11.5.1 cuda11.5/nsight/11.
 # pip3 install torch==1.8.1
 
 
-python3 GenerateChannels.py
+time python3 python/GenerateChannels.py

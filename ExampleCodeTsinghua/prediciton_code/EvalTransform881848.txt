@@ -1,0 +1,36 @@
+/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 4.0 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+True
+informerstack_data_0_sl25_ll10_pl5_dm64_nh8_el4_dl3_df64_atfull_fc5_ebfixed_dtTrue
+informerstack_e2e_data_0_sl25_ll10_pl5_dm64_nh8_el4_dl3_df64_atfull_fc5_ebfixed_dtTrue
+LSTM_data_0_sl25_pl5_hs256_hl2
+GRU_data_0_sl25_pl5_hs256_hl2
+RNN_data_0_sl25_pl5_hs256_hl2
+Set your test set directory
+CDL_B_v31_1.mat
+CDL_B_v32_1.mat
+informer  has been loaded!
+informer_e2e  has been loaded!
+lstm  has been loaded!
+Traceback (most recent call last):
+  File "/home/tue/20162638/ChannelEstimationTransformer/transformer_code_final/prediciton_code/test_transformer_lstm_AR.py", line 194, in <module>
+    lstm = torch.nn.DataParallel( lstm ).cuda() if args.use_gpu else lstm 
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/parallel/data_parallel.py", line 162, in __init__
+    self.module.to(self.src_device_obj)
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/module.py", line 1160, in to
+    return self._apply(convert)
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/module.py", line 810, in _apply
+    module._apply(fn)
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/module.py", line 810, in _apply
+    module._apply(fn)
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/rnn.py", line 218, in _apply
+    self._init_flat_weights()
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/rnn.py", line 155, in _init_flat_weights
+    self.flatten_parameters()
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/modules/rnn.py", line 185, in flatten_parameters
+    not torch.backends.cudnn.is_acceptable(fw.data)):
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/backends/cudnn/__init__.py", line 110, in is_acceptable
+    if not _init():
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/backends/cudnn/__init__.py", line 58, in _init
+    raise RuntimeError(
+RuntimeError: cuDNN version incompatibility: PyTorch was compiled  against (8, 9, 2) but found runtime version (8, 1, 1). PyTorch already comes bundled with cuDNN. One option to resolving this error is to ensure PyTorch can find the bundled cuDNN.Looks like your LD_LIBRARY_PATH contains incompatible version of cudnnPlease either remove it from the path or install cudnn (8, 9, 2)

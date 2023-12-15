@@ -1,0 +1,18 @@
+/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/utils/data/dataloader.py:557: UserWarning: This DataLoader will create 4.0 worker processes in total. Our suggested max number of worker in current system is 1, which is smaller than what this DataLoader is going to create. Please be aware that excessive worker creation might get DataLoader running slow or even freeze, lower the worker number to avoid potential slowness/freeze if necessary.
+  warnings.warn(_create_warning_msg(
+True
+informerstack_data_0_sl25_ll10_pl5_dm64_nh8_el4_dl3_df64_atfull_fc5_ebfixed_dtTrue
+informerstack_e2e_data_0_sl25_ll10_pl5_dm64_nh8_el4_dl3_df64_atfull_fc5_ebfixed_dtTrue
+LSTM_data_0_sl25_pl5_hs256_hl2
+GRU_data_0_sl25_pl5_hs256_hl2
+RNN_data_0_sl25_pl5_hs256_hl2
+Set your test set directory
+CDL_B_v31_1.mat
+CDL_B_v32_1.mat
+informer  has been loaded!
+Traceback (most recent call last):
+  File "/home/tue/20162638/ChannelEstimationTransformer/transformer_code_final/prediciton_code/test_transformer_lstm_AR.py", line 180, in <module>
+    informer = torch.nn.DataParallel( informer ).cuda() if args.use_gpu else informer 
+  File "/home/tue/20162638/miniconda3/envs/sionna/lib/python3.9/site-packages/torch/nn/parallel/data_parallel.py", line 150, in __init__
+    output_device = device_ids[0]
+IndexError: list index out of range

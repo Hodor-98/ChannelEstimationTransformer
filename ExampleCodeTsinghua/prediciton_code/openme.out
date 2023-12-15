@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/cm/local/apps/slurm/var/spool/job881834/slurm_script", line 14, in <module>
+    from data import * 
+ModuleNotFoundError: No module named 'data'

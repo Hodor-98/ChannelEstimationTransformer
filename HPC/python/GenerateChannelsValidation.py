@@ -101,7 +101,7 @@ l_min, l_max = time_lag_discrete_time_channel(rg.bandwidth)
 l_tot = l_max-l_min+1
 
 batch_size = 16
-num_of_batches = 5000
+num_of_batches = 1
 ebno_db = 30
 num_bits_per_symbol = 2 # QPSK modulation
 coderate = 0.5 # Code rate
@@ -113,7 +113,7 @@ ChannelNP = []
 for batch in range(num_of_batches):
     print(f"INFO: Generating batch {batch}", flush=True)
     
-    for subbatch in range(int(2048/batch_size)):
+    for subbatch in range(int(64/batch_size)):
 
 
         # The following values for truncation are recommended.
@@ -141,10 +141,19 @@ for batch in range(num_of_batches):
         ChannelTF_subbatch = tf.transpose(ChannelTF_subbatch, perm=[0,3,1,2])
         ChannelNP_subbatch = ChannelTF_subbatch.numpy()
         
+        x = np.array(list(range(ChannelNP_subbatch.shape[1])))
+        for j in range(batch_size):
+            plt.figure()
+            for i in range(4):
+                plt.subplot(2,2,i+1)
+                plt.plot(x,ChannelNP_subbatch[j,:,i,0].real, linestyle='--')
+            plt.savefig(f"ChannelPredictionPlots/Prediction_{str(j+subbatch*batch_size)}.png", dpi=300)
+            plt.close()
         if(subbatch == 0):
             ChannelNP_batch = ChannelNP_subbatch
         else:
             ChannelNP_batch = np.append(ChannelNP_batch, ChannelNP_subbatch, axis=0) 
+
 
     if(batch == 0):
         ChannelNP = np.expand_dims(ChannelNP_batch, axis=0)
@@ -157,24 +166,10 @@ for batch in range(num_of_batches):
     
     ChannelPyTorch = torch.from_numpy(ChannelNP)
 
-direction = "MultiGPU" 
-file = f'GeneratedChannels/ChannelCDL{cdl_model}_Tx{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}.pickle'
+
+file = f'GeneratedChannels/ChannelCDL{cdl_model}_Tx{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}__validate.pickle'
 
 
-
-# Check if the file exists
-try:
-    with open(file, 'rb') as handle:
-        existing_data = pickle.load(handle)
-    # Append new data to the existing file
-    ChannelPyTorch = np.concatenate((existing_data, ChannelPyTorch), axis=0)
-    ChannelPyTorch = torch.from_numpy(ChannelPyTorch)
-    print(ChannelPyTorch.shape)
-    with open(file, 'wb') as handle:
-        pickle.dump(ChannelPyTorch, handle)
-    print("New data appended to the existing file.")
-except FileNotFoundError:
-    # If the file doesn't exist, create a new file
-    with open(file, 'wb') as handle:
-        pickle.dump(ChannelPyTorch, handle)
-    print("File created with new data.")
+with open(file, 'wb') as handle:
+    pickle.dump(ChannelPyTorch, handle)
+print("File created with new data.")

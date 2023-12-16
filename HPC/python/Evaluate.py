@@ -12,6 +12,9 @@ from metrics import NMSELoss, Adap_NMSELoss
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
+speed = 30
+direction = 'uplink'
+
 # Constants
 enc_in = 16
 dec_in = 16
@@ -40,7 +43,7 @@ model = InformerStack(
 )
 
 model.eval()
-state_dict = torch.load("TrainedTransformers/best_model_params_V60.pt")
+state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt")
 state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
 model.load_state_dict(state_dict)
 print("Informer has been loaded!")
@@ -71,7 +74,7 @@ def evaluate(model):
     model.eval()  # turn on evaluation mode
     total_loss = 0.
     with torch.no_grad():
-        with open('GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V60__validate.pickle', 'rb') as handle:
+        with open(f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
             channel = pickle.load(handle)
         channel = channel[0]
         
@@ -89,8 +92,9 @@ def evaluate(model):
     return total_loss / (channel.size(0) - 1)
 
 
-with open('GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V30__validate.pickle', 'rb') as handle:
+with open(f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
     channel = pickle.load(handle)
+    channel = channel[0]
     
 
 batch_size, M, Nr, Nt = channel.shape 

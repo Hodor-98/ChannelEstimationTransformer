@@ -23,9 +23,6 @@ epochs = 10
 direction = 'uplink'
 max_batches = 2**30
 
-torch.backends.cudnn.enabled = True  # Enable cuDNN
-torch.backends.cudnn.benchmark = True  # Use cuDNN's auto-tuner for the best performance
-torch.cuda.init()
 # Check GPU memory i.e how much memory is there, how much is free
 def check_gpu_memory():
     if torch.cuda.is_available():
@@ -37,18 +34,24 @@ def check_gpu_memory():
         print(f"GPU Memory Used: {torch.cuda.memory_reserved(current_device) / 1024**2} MB")
     else:
         print("No GPU available.")
-        
 
-check_gpu_memory()
+
+
     
 def force_cudnn_initialization():
     s = 32
     dev = torch.device('cuda')
     torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
     
-force_cudnn_initialization()
 
-print(torch.cuda.device_count())
+if torch.cuda.is_available():
+    torch.backends.cudnn.enabled = True  # Enable cuDNN
+    torch.backends.cudnn.benchmark = True  # Use cuDNN's auto-tuner for the best performance
+    torch.cuda.init()
+    check_gpu_memory()
+    force_cudnn_initialization()
+
+    print(torch.cuda.device_count())
 
 enc_in = 16
 hs = 256
@@ -56,21 +59,24 @@ hl = 2
 seq_len = 25
 label_len = 10
 pred_len = 5
-device = torch.device('cuda')
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu') 
+device_ids = [i for i in range(torch.cuda.device_count())]
 
-lstm = LSTM(enc_in, enc_in, hs, hl) 
+
+# lstm = LSTM(enc_in, enc_in, hs, hl) 
 rnn =  RNN(enc_in, enc_in, hs, hl) 
-gru = GRU(enc_in, enc_in, hs, hl) 
+# gru = GRU(enc_in, enc_in, hs, hl) 
 
 
 
-models = [lstm, rnn, gru]
 
 
 
-def train(model: nn.Module) -> None:
+
+def train(model: nn.Module,optimizer,scheduler,epoch) -> None:
     model.train()  # turn on train mode
     total_loss = 0.
+    criterion = NMSELoss()
 
     start_time = time.time()
 
@@ -87,17 +93,16 @@ def train(model: nn.Module) -> None:
         channel = dataset[batch]
         
 
-        data, label = LoadBatch(channel[:, :25, :, :]), LoadBatch(channel[:, -5:, :, :])
+        data, label = LoadBatch(channel[:, :30, :, :]), LoadBatch(channel[:, -5:, :, :])
         label = label.to(device)
 
         enc_inp = data.to(device)
-        
-        
-        dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(device)
-        dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
+
+
     
-        output = model(enc_inp,dec_inp)[0]
-        loss = criterion(output, label)
+        output = model.train_data(enc_inp, device)
+        print(output.shape)
+        loss = criterion(output[:, -5:, :], label)
         # print(MSELoss(output,label).item())
         # loss = MSELoss(output,label)
 
@@ -122,47 +127,48 @@ def train(model: nn.Module) -> None:
 def evaluate(model):
     model.eval()  # turn on evaluation mode
     total_loss = 0.
+    criterion = NMSELoss()
+    
     with torch.no_grad():
         with open(f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
             channel = pickle.load(handle)
         channel = channel[0]
         print(channel.shape)
         
-        data, label = LoadBatch(channel[:, :25, :, :]), LoadBatch(channel[:, -5:, :, :])
-        
-        inp_net = data.to(device)
+        data, label = LoadBatch(channel[:, :30, :, :]), LoadBatch(channel[:, -5:, :, :])
         label = label.to(device)
 
-        enc_inp = inp_net
-        dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(device)
-        dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
+        enc_inp = data.to(device)
+
+
         seq_len_temp = data.size(0)
-        output = model(enc_inp,dec_inp)[0]
-        total_loss += seq_len_temp * criterion(output, label).item()
+        output = model.train_data(enc_inp, device)
+        total_loss += seq_len_temp * criterion(output[:, -5:, :], label).item()
         
     return total_loss / (channel.size(0) - 1)
 
 
 def train_loop(model: nn.Module):
+    best_val_loss = float('inf')
     ModelDictName = f"TrainedTransformers/{model.__class__.__name__}_best_model_params_V{speed}_{direction}.pt"
 
     if os.path.exists(ModelDictName):
-        model.load_state_dict(torch.load(ModelDictName,map_location="cuda"))
+        model.load_state_dict(torch.load(ModelDictName,map_location="cpu"))
         print("Model loaded successfully!")
     else:
         print(f"File '{ModelDictName}' does not exist. Creating new model.")
         
-    criterion = NMSELoss()
+
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
 
     device_ids = [i for i in range(torch.cuda.device_count())]
-    model = torch.nn.DataParallel(model,device_ids).cuda()
+    model = torch.nn.DataParallel( model ).cuda() if torch.cuda.is_available() else model 
 
     
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
-        train(model)
+        train(model,optimizer,scheduler,epoch)
         val_loss = evaluate(model)
         val_ppl = math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
@@ -175,5 +181,7 @@ def train_loop(model: nn.Module):
             torch.save(model.state_dict(), ModelDictName)
 
         scheduler.step()
-    
-[train_loop(model) for model in models]
+
+
+
+train_loop(rnn)

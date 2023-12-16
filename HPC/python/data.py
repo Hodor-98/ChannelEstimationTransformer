@@ -45,34 +45,29 @@ class SeqData(Dataset):
         
         with open(dataset_name, 'rb') as handle:
             self.dataset = pickle.load(handle)
-        
+            
     def __len__(self):
-        return self.dataset.size[0]
+        return self.dataset.shape[0] 
     
     def __getitem__(self, idx):
         seed = math.floor(math.modf(time.time())[0]*500*320000)**2 % (2**32 - 2)
         np.random.seed(seed)
         
-        print(self.dataset.shape)
-        
         H = self.dataset[idx]
-
-        M,T,Nr,Nt = H.shape  #slot数 * 子载波数 * 基站天线数 * 用户天线数
-        L = self.length       #序列长度
+        M,T,Nr,Nt = H.shape 
+        L = self.length      
         
-        start = np.random.randint(0, T-L+1) #序列开始位置
+        start = np.random.randint(0, T-L+1) 
         end = start + L
         
         H = H[:, start:end, ...]
         H_pred = H[:,self.seq_len:,...]
         H_seq = H[:,0:self.seq_len, ...]
         
-        
-        index = np.random.choice(M, self.length, replace = False)    
+        index = np.random.choice(M, M, replace = False)    
         H = H[index, ...]
         H_seq = H_seq[index, ...]
-        H_pred = H_pred[index, ...] #shape: L \times M \times Nr \times Nt
-        
+        H_pred = H_pred[index, ...] 
         
         return H, H_seq, H_pred
 

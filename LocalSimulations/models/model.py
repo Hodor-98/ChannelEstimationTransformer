@@ -310,8 +310,6 @@ class RNN(nn.Module):
         outputs = torch.cat(outputs, dim = 0).permute(1,0,2).contiguous()
 
         return outputs
-    
-    
 
 class GRUUnit(nn.Module):
     """

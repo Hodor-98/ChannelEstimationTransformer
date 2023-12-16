@@ -88,6 +88,9 @@ cdl_model = "B"       # Suitable values are ["A", "B", "C", "D", "E"]
 
 speed = 30/3.6            # UT speed [m/s]. BSs are always assumed to be fixed.
                       # The direction of travel will chosen randomly within the x-y plane.
+                      
+                      
+number_of_slots = 50
 
 
 
@@ -100,8 +103,8 @@ print(rg.num_time_samples)
 l_min, l_max = time_lag_discrete_time_channel(rg.bandwidth)
 l_tot = l_max-l_min+1
 
-batch_size = 16
-num_of_batches = 5000
+batch_size = 2
+num_of_batches = 10
 ebno_db = 30
 num_bits_per_symbol = 2 # QPSK modulation
 coderate = 0.5 # Code rate
@@ -113,13 +116,13 @@ ChannelNP = []
 for batch in range(num_of_batches):
     print(f"INFO: Generating batch {batch}", flush=True)
     
-    for subbatch in range(int(2048/batch_size)):
+    for subbatch in range(int(64/batch_size)):
 
 
         # The following values for truncation are recommended.
         # Please feel free to tailor them to you needs.
 
-        a, tau  = cdl(batch_size=batch_size, num_time_steps=rg.num_time_samples*30+l_tot-1, sampling_frequency=rg.bandwidth)
+        a, tau  = cdl(batch_size=batch_size, num_time_steps=rg.num_time_samples*number_of_slots+l_tot-1, sampling_frequency=rg.bandwidth)
 
         # This function removes nulled subcarriers from any tensor having the shape of a resource grid
         remove_nulled_scs = RemoveNulledSubcarriers(rg)
@@ -129,7 +132,7 @@ for batch in range(num_of_batches):
         # We need to sub-sample the channel impulse reponse to compute perfect CSI
         # for the receiver as it only needs one channel realization per OFDM symbol
         a_freq = a[...,rg.cyclic_prefix_length:-1:(rg.fft_size+rg.cyclic_prefix_length)]
-        a_freq = a_freq[...,:rg.num_ofdm_symbols*30]
+        a_freq = a_freq[...,:rg.num_ofdm_symbols*number_of_slots]
 
         # Compute the channel frequency response
         h_freq = cir_to_ofdm_channel(frequencies, a_freq, tau, normalize=True)
@@ -157,10 +160,9 @@ for batch in range(num_of_batches):
     
     ChannelPyTorch = torch.from_numpy(ChannelNP)
 
-direction = "MultiGPU" 
-file = f'GeneratedChannels/ChannelCDL{cdl_model}_Tx{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}.pickle'
+file = f'GeneratedChannels/ChannelCDL{cdl_model}_S{number_of_slots}_{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}.pickle'
 
-
+print(f"Saving data with shape {ChannelPyTorch.size}")
 
 # Check if the file exists
 try:

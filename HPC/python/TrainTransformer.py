@@ -14,6 +14,7 @@ from torch import nn, Tensor
 from models.model import Informer, InformerStack, LSTM,RNN,GRU, InformerStack_e2e
 import matplotlib.pyplot as plt
 from metrics import NMSELoss, Adap_NMSELoss
+from data import SeqData
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
     
@@ -21,7 +22,7 @@ speed = 30
 lr = 1  # learning rate
 epochs = 10
 direction = 'uplink'
-max_batches = 1000
+num_batches = 10
 
 
 enc_in = 16
@@ -42,11 +43,10 @@ embed = 'fixed'
 activation = 'gelu'
 output_attention = True
 distil = True
-device = torch.device('cuda')# Example value, replace this with your device choice
+device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu') 
 
-torch.backends.cudnn.enabled = True  # Enable cuDNN
-torch.backends.cudnn.benchmark = True  # Use cuDNN's auto-tuner for the best performance
-torch.cuda.init()
+
+
 # Check GPU memory i.e how much memory is there, how much is free
 def check_gpu_memory():
     if torch.cuda.is_available():
@@ -60,17 +60,22 @@ def check_gpu_memory():
         print("No GPU available.")
 
 
-check_gpu_memory()
+
     
 def force_cudnn_initialization():
     s = 32
     dev = torch.device('cuda')
     torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
     
-force_cudnn_initialization()
 
-print(torch.cuda.device_count())
+if torch.cuda.is_available():
+    torch.backends.cudnn.enabled = True  # Enable cuDNN
+    torch.backends.cudnn.benchmark = True  # Use cuDNN's auto-tuner for the best performance
+    torch.cuda.init()
+    check_gpu_memory()
+    force_cudnn_initialization()
 
+    print(torch.cuda.device_count())
 
 model = InformerStack(
     enc_in,
@@ -96,14 +101,16 @@ model = InformerStack(
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 
-model = torch.nn.DataParallel(model,device_ids).cuda()
+model = torch.nn.DataParallel( model ).cuda() if torch.cuda.is_available() else model 
 
 
 
 ModelDictName = f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt"
 
 if os.path.exists(ModelDictName):
-    model.load_state_dict(torch.load(ModelDictName,map_location="cuda"))
+    state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cpu'))
+    state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
+    model.load_state_dict(state_dict)
     print("Model loaded successfully!")
 else:
     print(f"File '{ModelDictName}' does not exist. Creating new model.")
@@ -137,26 +144,27 @@ def real2complex(data):
     data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
     return data2
 
+dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
+testData =  SeqData(dataset_name, seq_len, pred_len)
+test_loader = DataLoader(dataset = testData, batch_size = 16, shuffle = False,  
+                          num_workers = 4., drop_last = False, pin_memory = True) 
+
 def train(model: nn.Module) -> None:
     model.train()  # turn on train mode
     total_loss = 0.
 
     start_time = time.time()
 
-    with open(f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle', 'rb') as handle:
-        dataset = pickle.load(handle)
-    print(dataset.shape)
-    print(f"Info: Dataset contains {dataset.size(0)} batches")
-    num_batches = dataset.size(0)
-    if max_batches < num_batches:
-        num_batches = max_batches
+
         
     log_interval = num_batches/8
     for batch, i in enumerate(range(0, num_batches - 1)):
-        channel = dataset[batch]
+
+        
+        H, H_seq, H_pred = testData[batch]
         
 
-        data, label = LoadBatch(channel[:, :25, :, :]), LoadBatch(channel[:, -5:, :, :])
+        data, label = LoadBatch(H_seq), LoadBatch(H_pred)
         label = label.to(device)
 
         enc_inp = data.to(device)

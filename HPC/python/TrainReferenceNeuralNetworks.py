@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 import math
 from torch import nn, Tensor
 from models.model import Informer, InformerStack, LSTM,RNN,GRU, InformerStack_e2e
+from data import LoadBatch, real2complex 
 import matplotlib.pyplot as plt
 from metrics import NMSELoss, Adap_NMSELoss
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -64,25 +65,6 @@ gru = GRU(enc_in, enc_in, hs, hl)
 
 
 models = [lstm, rnn, gru]
-
-def LoadBatch(H):
-    '''
-    H: T * M * Nr * Nt
-    ''' 
-    M, T, Nr, Nt = H.shape 
-    H = H.reshape([M, T, Nr * Nt])
-    H_real = np.zeros([M, T, Nr * Nt, 2])
-    H_real[:,:,:,0] = H.real 
-    H_real[:,:,:,1] = H.imag 
-    H_real = H_real.reshape([M, T, Nr*Nt*2])
-    H_real = torch.tensor(H_real, dtype = torch.float32)
-    return H_real
-
-def real2complex(data):
-    B, P, N = data.shape 
-    data2 = data.reshape([B, P, N//2, 2])
-    data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
-    return data2
 
 
 

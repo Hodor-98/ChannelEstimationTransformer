@@ -37,6 +37,12 @@ def real2complex(data):
     data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
     return data2
 
+def real2complex(data):
+    B, P, N = data.shape 
+    data2 = data.reshape([B, P, N//2, 2])
+    data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
+    return data2
+
 # Check GPU memory
 def check_gpu_memory():
     if (torch.cuda.is_available() and use_gpu):
@@ -75,7 +81,6 @@ def train(model: nn.Module, optimizer, scheduler, epoch, dataloader) -> None:
     criterion = NMSELoss()
     start_time = time.time()
     
-<<<<<<< HEAD
     batch = next(iter(dataloader))
     for itr in range(dataloader.batch_size):
         H, H_seq, H_pred = [tensor[itr] for tensor in batch]
@@ -104,47 +109,6 @@ def train(model: nn.Module, optimizer, scheduler, epoch, dataloader) -> None:
                 f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
             total_loss = 0
             start_time = time.time()
-=======
-    for batch_itr, batch in enumerate(dataloader):
-        for itr in range(dataloader.batch_size):
-            H, H_seq, H_pred = [tensor[itr] for tensor in batch]
-            
-            data, label = LoadBatch(H), LoadBatch(H_pred)
-            data = data.to(device)
-            label = label.to(device)
-            
-            output = model.train_data(data, device)
-            
-            
-            outputs_plot_train = real2complex(np.array(output.detach().cpu()))
-            x = np.array(list(range(data.shape[1])))
-            plt.figure()
-            for i in range(4):
-                plt.subplot(2,2,i+1)
-                plt.plot(x,outputs_plot_train[0,:,i].real)
-                plt.plot(x,data[0,:,i].real, linestyle='--')
-            plt.savefig(f"ChannelPredictionPlots/Prediction_test_temp.png", dpi=300)
-            
-            loss = criterion(output, data)
-            # loss = criterion(output, data)
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-            optimizer.step()
-
-            total_loss += loss.item()
-            if itr % (dataloader.batch_size // 8) == 0 and itr > 0:
-                lr = scheduler.get_last_lr()[0]
-                ms_per_batch = (time.time() - start_time) * 1000 / (dataloader.batch_size // 8)
-                cur_loss = total_loss / (dataloader.batch_size // 8)
-                ppl = math.exp(cur_loss)
-
-                print(f'| epoch {epoch:3d} | {itr:5d}/{dataloader.batch_size:5d} batches | '
-                    f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-                    f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
-                total_loss = 0
-                start_time = time.time()
->>>>>>> 6733fa541fd457d53578d451e443549cf742c747
 
 def evaluate(model):
     model.eval()  # turn on evaluation mode
@@ -162,11 +126,6 @@ def evaluate(model):
         enc_inp = data.to(device)
 
 
-<<<<<<< HEAD
-        seq_len_temp = data.size(0)
-        output = model.test_data(enc_inp, pred_len, device)
-        total_loss += seq_len_temp * criterion(output, label).item()
-=======
         output = model.test_data(enc_inp, pred_len, device)
         print("testdata",output.shape)
         total_loss +=  criterion(output[:, -pred_len:, :], label).item()
@@ -208,7 +167,6 @@ def evaluate(model):
         plt.savefig(f"ChannelPredictionPlots/Prediction_test_temp.png", dpi=300)
         
         quit()
->>>>>>> 6733fa541fd457d53578d451e443549cf742c747
         
     return total_loss / (channel.size(0) - 1)
 
@@ -260,11 +218,7 @@ if (torch.cuda.is_available() and use_gpu):
 # Initialize and run training loop with SeqData DataLoader
 dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 testData =  SeqData(dataset_name, seq_len, pred_len)
-<<<<<<< HEAD
 dataloader = DataLoader(dataset = testData, batch_size = 512, shuffle = True,  
-=======
-dataloader = DataLoader(dataset = testData, batch_size = 100, shuffle = True,  
->>>>>>> 6733fa541fd457d53578d451e443549cf742c747
                           num_workers = 4, drop_last = False, pin_memory = True) 
 
 lstm = LSTM(enc_in, enc_in, hs, hl)

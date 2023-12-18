@@ -25,12 +25,14 @@ hl = 2
 seq_len = 25
 label_len = 10
 pred_len = 5
-device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
-device_ids = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+use_gpu = True
+
+device = torch.device('cuda:0') if (torch.cuda.is_available() and use_gpu) else torch.device('cpu')
+device_ids = list(range(torch.cuda.device_count())) if (torch.cuda.is_available() and use_gpu) else []
 
 # Check GPU memory
 def check_gpu_memory():
-    if torch.cuda.is_available():
+    if (torch.cuda.is_available() and use_gpu):
         current_device = torch.cuda.current_device()
         gpu = torch.cuda.get_device_properties(current_device)
         print(f"GPU Name: {gpu.name}")
@@ -43,7 +45,7 @@ def check_gpu_memory():
 # Force cuDNN initialization
 def force_cudnn_initialization():
     s = 32
-    dev = torch.device('cuda')
+    dev = torch.device('cuda:0')
     torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
 
 def LoadBatch(H):
@@ -66,34 +68,34 @@ def train(model: nn.Module, optimizer, scheduler, epoch, dataloader) -> None:
     criterion = NMSELoss()
     start_time = time.time()
     
-    for batch_itr, batch in enumerate(dataloader):
-        for itr in range(dataloader.batch_size):
-            H, H_seq, H_pred = [tensor[itr] for tensor in batch]
-            
-            data, label = LoadBatch(H), LoadBatch(H_pred)
-            data = data.to(device)
-            label = label.to(device)
-            
-            output = model.train_data(data, device)
-            loss = criterion(output[:, -pred_len:, :], label)
+    batch = next(iter(dataloader))
+    for itr in range(dataloader.batch_size):
+        H, H_seq, H_pred = [tensor[itr] for tensor in batch]
+        
+        data, label = LoadBatch(H), LoadBatch(H_pred)
+        data = data.to(device)
+        label = label.to(device)
+        
+        output = model.train_data(data, device)
+        loss = criterion(output[:, -pred_len:, :], label)
 
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
-            optimizer.step()
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        optimizer.step()
 
-            total_loss += loss.item()
-            if batch_itr % (dataloader.batch_size // 8) == 0 and batch_itr > 0:
-                lr = scheduler.get_last_lr()[0]
-                ms_per_batch = (time.time() - start_time) * 1000 / (dataloader.batch_size // 8)
-                cur_loss = total_loss / (dataloader.batch_size // 8)
-                ppl = math.exp(cur_loss)
+        total_loss += loss.item()
+        if itr   % (dataloader.batch_size // 8) == 0 and itr > 0:
+            lr = scheduler.get_last_lr()[0]
+            ms_per_batch = (time.time() - start_time) * 1000 / (dataloader.batch_size // 8)
+            cur_loss = total_loss / (dataloader.batch_size // 8)
+            ppl = math.exp(cur_loss)
 
-                print(f'| epoch {epoch:3d} | {batch_itr:5d}/{dataloader.batch_size:5d} batches | '
-                    f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-                    f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
-                total_loss = 0
-                start_time = time.time()
+            print(f'| epoch {epoch:3d} | {itr:5d}/{dataloader.batch_size:5d} batches | '
+                f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+                f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
+            total_loss = 0
+            start_time = time.time()
 
 def evaluate(model):
     model.eval()  # turn on evaluation mode
@@ -112,8 +114,8 @@ def evaluate(model):
 
 
         seq_len_temp = data.size(0)
-        output = model.train_data(enc_inp, device)
-        total_loss += seq_len_temp * criterion(output[:, -pred_len:, :], label).item()
+        output = model.test_data(enc_inp, pred_len, device)
+        total_loss += seq_len_temp * criterion(output, label).item()
         
     return total_loss / (channel.size(0) - 1)
 
@@ -123,7 +125,7 @@ def train_loop(model: nn.Module, dataloader):
     best_val_loss = float('inf')
     model_dict_name = f"TrainedTransformers/{model.__class__.__name__}_best_model_params_V{speed}_{direction}.pt"
 
-    if torch.cuda.is_available():
+    if (torch.cuda.is_available() and use_gpu):
         model.load_state_dict(torch.load(model_dict_name, map_location="cuda"))
     else:
         if os.path.exists(model_dict_name):
@@ -135,7 +137,7 @@ def train_loop(model: nn.Module, dataloader):
     optimizer = torch.optim.SGD(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
 
-    model = torch.nn.DataParallel(model).cuda() if torch.cuda.is_available() else model
+    model = torch.nn.DataParallel(model).cuda() if (torch.cuda.is_available() and use_gpu) else model
 
     for epoch in range(1, epochs + 1):
         epoch_start_time = time.time()
@@ -154,7 +156,7 @@ def train_loop(model: nn.Module, dataloader):
         scheduler.step()
 
 # Execution
-if torch.cuda.is_available():
+if (torch.cuda.is_available() and use_gpu):
     torch.backends.cudnn.enabled = True
     torch.backends.cudnn.benchmark = True
     torch.cuda.init()
@@ -165,7 +167,7 @@ if torch.cuda.is_available():
 # Initialize and run training loop with SeqData DataLoader
 dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 testData =  SeqData(dataset_name, seq_len, pred_len)
-dataloader = DataLoader(dataset = testData, batch_size = 10, shuffle = True,  
+dataloader = DataLoader(dataset = testData, batch_size = 512, shuffle = True,  
                           num_workers = 4, drop_last = False, pin_memory = True) 
 
 lstm = LSTM(enc_in, enc_in, hs, hl)

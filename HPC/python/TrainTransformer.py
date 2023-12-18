@@ -20,7 +20,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
     
 speed = 30
 lr = 1  # learning rate
-epochs = 10
+epochs = 50
 direction = 'uplink'
 num_batches = 10
 
@@ -44,7 +44,7 @@ activation = 'gelu'
 output_attention = True
 distil = True
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu') 
-
+use_gpu = True
 
 
 # Check GPU memory i.e how much memory is there, how much is free
@@ -101,26 +101,25 @@ model = InformerStack(
 
 device_ids = [i for i in range(torch.cuda.device_count())]
 
+
+
+model_dict_name = f"TrainedTransformers/{model.__class__.__name__}_best_model_params_V{speed}_{direction}.pt"
+
+ 
+if os.path.exists(model_dict_name):
+    if (torch.cuda.is_available() and use_gpu):
+        state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cuda'))
+        state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
+        model.load_state_dict(state_dict)
+    else:
+        state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cpu'))
+        state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
+        print("Model loaded successfully!")
+else:
+    print(f"File '{model_dict_name}' does not exist. Creating a new model.")
+
 model = torch.nn.DataParallel( model ).cuda() if torch.cuda.is_available() else model 
 
-
-
-ModelDictName = f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt"
-
-if os.path.exists(ModelDictName):
-    state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cpu'))
-    state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
-    model.load_state_dict(state_dict)
-    print("Model loaded successfully!")
-else:
-    print(f"File '{ModelDictName}' does not exist. Creating new model.")
-
-
-# criterion = nn.CrossEntropyLoss()
-# criterion = nn.MSELoss()
-
-
-# MSELoss = nn.MSELoss()
 criterion = NMSELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.99)
@@ -146,7 +145,7 @@ def real2complex(data):
 
 dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 testData =  SeqData(dataset_name, seq_len, pred_len)
-test_loader = DataLoader(dataset = testData, batch_size = 16, shuffle = False,  
+test_loader = DataLoader(dataset = testData, batch_size = 512*8, shuffle = True,  
                           num_workers = 4., drop_last = False, pin_memory = True) 
 
 def train(model: nn.Module) -> None:
@@ -157,8 +156,8 @@ def train(model: nn.Module) -> None:
 
 
         
-    log_interval = num_batches/8
-    for batch, i in enumerate(range(0, num_batches - 1)):
+    log_interval = test_loader.batch_size/8
+    for batch, i in enumerate(range(test_loader.batch_size)):
 
         
         H, H_seq, H_pred = testData[batch]
@@ -190,7 +189,7 @@ def train(model: nn.Module) -> None:
             cur_loss = total_loss / log_interval
             ppl = math.exp(cur_loss)
 
-            print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+            print(f'| epoch {epoch:3d} | {batch:5d}/{test_loader.batch_size:5d} batches | '
                   f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
                   f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
             total_loss = 0
@@ -236,11 +235,11 @@ for epoch in range(1, epochs + 1):
     print('-' * 89, flush=True)
     if val_loss < best_val_loss:
         best_val_loss = val_loss
-        torch.save(model.state_dict(), ModelDictName)
+        torch.save(model.state_dict(), model_dict_name)
 
     scheduler.step()
     
-model.load_state_dict(torch.load(ModelDictName))
+model.load_state_dict(torch.load(model_dict_name))
 test_loss = evaluate(model)
 test_ppl = math.exp(test_loss)
 print('=' * 89)

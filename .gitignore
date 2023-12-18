@@ -2,3 +2,4 @@ HPC/TrainTransformer_output_*.txt
 HPC/ChannelPredictionPlots/*.png
 *.pickle
 
+HPC/log/*

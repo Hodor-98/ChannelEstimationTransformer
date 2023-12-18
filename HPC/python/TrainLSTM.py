@@ -10,6 +10,7 @@ from models.model import Informer, InformerStack, LSTM, RNN, GRU, InformerStack_
 from metrics import NMSELoss, Adap_NMSELoss
 from data import SeqData
 from torch.utils.data import Dataset, DataLoader
+import matplotlib.pyplot as plt
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
@@ -22,13 +23,19 @@ max_batches = 2 ** 30
 enc_in = 16
 hs = 256
 hl = 2
-seq_len = 25
+seq_len = 40
 label_len = 10
 pred_len = 5
 use_gpu = True
 
 device = torch.device('cuda:0') if (torch.cuda.is_available() and use_gpu) else torch.device('cpu')
 device_ids = list(range(torch.cuda.device_count())) if (torch.cuda.is_available() and use_gpu) else []
+
+def real2complex(data):
+    B, P, N = data.shape 
+    data2 = data.reshape([B, P, N//2, 2])
+    data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
+    return data2
 
 # Check GPU memory
 def check_gpu_memory():
@@ -68,6 +75,7 @@ def train(model: nn.Module, optimizer, scheduler, epoch, dataloader) -> None:
     criterion = NMSELoss()
     start_time = time.time()
     
+<<<<<<< HEAD
     batch = next(iter(dataloader))
     for itr in range(dataloader.batch_size):
         H, H_seq, H_pred = [tensor[itr] for tensor in batch]
@@ -96,6 +104,47 @@ def train(model: nn.Module, optimizer, scheduler, epoch, dataloader) -> None:
                 f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
             total_loss = 0
             start_time = time.time()
+=======
+    for batch_itr, batch in enumerate(dataloader):
+        for itr in range(dataloader.batch_size):
+            H, H_seq, H_pred = [tensor[itr] for tensor in batch]
+            
+            data, label = LoadBatch(H), LoadBatch(H_pred)
+            data = data.to(device)
+            label = label.to(device)
+            
+            output = model.train_data(data, device)
+            
+            
+            outputs_plot_train = real2complex(np.array(output.detach().cpu()))
+            x = np.array(list(range(data.shape[1])))
+            plt.figure()
+            for i in range(4):
+                plt.subplot(2,2,i+1)
+                plt.plot(x,outputs_plot_train[0,:,i].real)
+                plt.plot(x,data[0,:,i].real, linestyle='--')
+            plt.savefig(f"ChannelPredictionPlots/Prediction_test_temp.png", dpi=300)
+            
+            loss = criterion(output, data)
+            # loss = criterion(output, data)
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+            optimizer.step()
+
+            total_loss += loss.item()
+            if itr % (dataloader.batch_size // 8) == 0 and itr > 0:
+                lr = scheduler.get_last_lr()[0]
+                ms_per_batch = (time.time() - start_time) * 1000 / (dataloader.batch_size // 8)
+                cur_loss = total_loss / (dataloader.batch_size // 8)
+                ppl = math.exp(cur_loss)
+
+                print(f'| epoch {epoch:3d} | {itr:5d}/{dataloader.batch_size:5d} batches | '
+                    f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+                    f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}', flush=True)
+                total_loss = 0
+                start_time = time.time()
+>>>>>>> 6733fa541fd457d53578d451e443549cf742c747
 
 def evaluate(model):
     model.eval()  # turn on evaluation mode
@@ -107,15 +156,59 @@ def evaluate(model):
             channel = pickle.load(handle)
         channel = channel[0]
         
-        data, label = LoadBatch(channel[:, :30, :, :]), LoadBatch(channel[:, -pred_len:, :, :])
+        data, label = LoadBatch(channel[:, :40, :, :]), LoadBatch(channel[:, -pred_len:, :, :])
         label = label.to(device)
 
         enc_inp = data.to(device)
 
 
+<<<<<<< HEAD
         seq_len_temp = data.size(0)
         output = model.test_data(enc_inp, pred_len, device)
         total_loss += seq_len_temp * criterion(output, label).item()
+=======
+        output = model.test_data(enc_inp, pred_len, device)
+        print("testdata",output.shape)
+        total_loss +=  criterion(output[:, -pred_len:, :], label).item()
+        
+        outputs_plot_test = real2complex(np.array(output.detach().cpu()))
+        print(output.shape)
+            
+        x = np.array(list(range(channel.shape[1])))
+        
+        # plt.figure()
+        # for i in range(4):
+        #     plt.subplot(2,2,i+1)
+        #     plt.plot(x[-pred_len:],outputs_plot[0,-pred_len:,i].real)
+        #     plt.plot(x,channel[0,:,i,0].real, linestyle='--')
+        # plt.savefig(f"ChannelPredictionPlots/Prediction_test.png", dpi=300)
+        # print("Bazinga")
+        
+        data, label = LoadBatch(channel[:, :35, :, :]), LoadBatch(channel[:, -pred_len:, :, :])
+        label = label.to(device)
+        enc_inp = data.to(device)
+        
+        output = model.test_data(data,5, device)
+        print("traindata",output.shape)
+        # total_loss += seq_len_temp * criterion(output, data).item()
+        data, label = LoadBatch(channel[:, :30, :, :]), LoadBatch(channel[:, -pred_len:, :, :])
+        data_plot   =real2complex(np.array(data.detach().cpu()))
+        
+        outputs_plot_train = real2complex(np.array(output.detach().cpu()))
+            
+        x = np.array(list(range(channel.shape[1])))
+        print(x)
+        
+        plt.figure()
+        for i in range(4):
+            plt.subplot(2,2,i+1)
+            plt.plot(x,outputs_plot_train[0,:,i].real)
+            plt.plot(x,outputs_plot_test[0,:,i].real)
+            plt.plot(x,data_plot[0,:,i].real, linestyle='--')
+        plt.savefig(f"ChannelPredictionPlots/Prediction_test_temp.png", dpi=300)
+        
+        quit()
+>>>>>>> 6733fa541fd457d53578d451e443549cf742c747
         
     return total_loss / (channel.size(0) - 1)
 
@@ -167,7 +260,11 @@ if (torch.cuda.is_available() and use_gpu):
 # Initialize and run training loop with SeqData DataLoader
 dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 testData =  SeqData(dataset_name, seq_len, pred_len)
+<<<<<<< HEAD
 dataloader = DataLoader(dataset = testData, batch_size = 512, shuffle = True,  
+=======
+dataloader = DataLoader(dataset = testData, batch_size = 100, shuffle = True,  
+>>>>>>> 6733fa541fd457d53578d451e443549cf742c747
                           num_workers = 4, drop_last = False, pin_memory = True) 
 
 lstm = LSTM(enc_in, enc_in, hs, hl)

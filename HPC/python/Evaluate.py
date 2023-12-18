@@ -34,20 +34,55 @@ embed = 'fixed'
 activation = 'gelu'
 output_attention = True
 distil = True
-device = torch.device('cuda')  # Example value, replace this with your device choice
 
-model = InformerStack(
+hs = 256
+hl = 2
+
+use_gpu = False
+
+
+device = torch.device('cuda:0') if use_gpu else torch.device('cpu')   # Example value, replace this with your device choice
+
+transformer = InformerStack(
     enc_in, dec_in, c_out, seq_len, label_len, pred_len, factor, d_model, n_heads,
     e_layers, d_layers, d_ff, dropout, attn, embed, activation, output_attention,
     distil, device
 )
 
-model.eval()
-state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt")
+lstm = LSTM(enc_in, enc_in, hs, hl) 
+rnn =  RNN(enc_in, enc_in, hs, hl) 
+gru = GRU(enc_in, enc_in, hs, hl) 
+
+
+
+state_dict = torch.load(f"TrainedTransformers/{transformer.__class__.__name__}_best_model_params_V{speed}_{direction}.pt", map_location=torch.device('cpu'))
 state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
-model.load_state_dict(state_dict)
-print("Informer has been loaded!")
-informer = torch.nn.DataParallel(model).cuda()
+transformer.load_state_dict(state_dict)
+transformer = torch.nn.DataParallel( lstm ).cuda() if use_gpu else transformer 
+print("transformer has been loaded!")
+
+# load LSTM 
+state_dict = torch.load(f"TrainedTransformers/{lstm.__class__.__name__}_best_model_params_V{speed}_{direction}.pt")
+lstm.load_state_dict(state_dict) 
+print("lstm  has been loaded!") 
+lstm = torch.nn.DataParallel( lstm ).cuda() if use_gpu else lstm 
+ 
+# load gru 
+state_dict = torch.load(f"TrainedTransformers/{gru.__class__.__name__}_best_model_params_V{speed}_{direction}.pt")
+gru.load_state_dict(state_dict) 
+print("lstm  has been loaded!") 
+gru = torch.nn.DataParallel( gru ).cuda() if use_gpu else gru 
+ 
+# load rnn 
+state_dict = torch.load(f"TrainedTransformers/{rnn.__class__.__name__}_best_model_params_V{speed}_{direction}.pt")
+rnn.load_state_dict(state_dict) 
+print("rnn has been loaded!") 
+rnn = torch.nn.DataParallel( rnn ).cuda() if use_gpu else rnn 
+ 
+transformer.eval() 
+lstm.eval() 
+gru.eval() 
+rnn.eval() 
 
 
 def LoadBatch(H):
@@ -70,6 +105,7 @@ def real2complex(data):
     return data2
 
 criterion = NMSELoss()
+
 def evaluate(model):
     model.eval()  # turn on evaluation mode
     total_loss = 0.
@@ -110,10 +146,10 @@ dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=
 
 # informer
 if output_attention:
-    outputs_informer = informer(enc_inp, dec_inp)[0]
+    outputs_informer = transformer(enc_inp, dec_inp)[0]
     output = outputs_informer
 else:
-    outputs_informer = informer(enc_inp, dec_inp)
+    outputs_informer = transformer(enc_inp, dec_inp)
 outputs_informer = outputs_informer.cpu().detach()
 outputs_informer = real2complex(np.array(outputs_informer))
 
@@ -122,20 +158,76 @@ outputs_informer = outputs_informer.reshape([batch_size, pred_len, Nr, Nt])
 
 x = np.array(list(range(channel.shape[1])))
 
-for j in range(channel.shape[0]):
+for j in range(8):
     plt.figure()
     for i in range(4):
         plt.subplot(2,2,i+1)
         plt.plot(x[-pred_len:],outputs_informer[j,:,i,0].real)
         plt.plot(x,channel[j,:,i,0].real, linestyle='--')
-    plt.savefig(f"ChannelPredictionPlots/Prediction_{j}.png", dpi=300)
+    plt.savefig(f"ChannelPredictionPlots/Prediction_transformer_{j}.png", dpi=300)
     
-test_loss = evaluate(informer)
+    
+    
+test_loss = evaluate(transformer)
 test_ppl = math.exp(test_loss)
 print('=' * 89)
 print(f'| End of training | test loss {test_loss:5.2f} | '
       f'test ppl {test_ppl:8.2f}')
 print('=' * 89)
+
+
+# data, label = LoadBatch(channel[:, :25, :, :]), LoadBatch(channel[:, -5:, :, :])
+
+# lstm 
+outputs_lstm = lstm.test_data(enc_inp, pred_len, device) 
+outputs_lstm = outputs_lstm.cpu().detach() 
+nmse_lstm = criterion(outputs_lstm, label) 
+outputs_lstm = real2complex(np.array(outputs_lstm))   # shape = [64, 3, 8] 
+
+print(outputs_lstm.shape)
+
+for j in range(8):
+    plt.figure()
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(x[-pred_len:],outputs_lstm[j,:,i].real)
+        plt.plot(x,channel[j,:,i,0].real, linestyle='--')
+    plt.savefig(f"ChannelPredictionPlots/Prediction_lstm_{j}.png", dpi=300)
+    
+# gru 
+outputs_gru = gru.test_data(enc_inp, pred_len, device) 
+outputs_gru = outputs_gru.cpu().detach() 
+nmse_gru = criterion(outputs_gru, label) 
+outputs_gru = real2complex(np.array(outputs_gru))
+
+
+for j in range(8):
+    plt.figure()
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(x[-pred_len:],outputs_gru[j,:,i].real)
+        plt.plot(x,channel[j,:,i,0].real, linestyle='--')
+    plt.savefig(f"ChannelPredictionPlots/Prediction_gru_{j}.png", dpi=300)
+    
+    
+
+# rnn 
+outputs_rnn = rnn.test_data(enc_inp, pred_len, device) 
+outputs_rnn = outputs_rnn.cpu().detach() 
+nmse_rnn = criterion(outputs_rnn, label) 
+outputs_rnn = real2complex(np.array(outputs_rnn)) 
+
+
+for j in range(8):
+    plt.figure()
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(x[-pred_len:],outputs_rnn[j,:,i].real)
+        plt.plot(x,channel[j,:,i,0].real, linestyle='--')
+    plt.savefig(f"ChannelPredictionPlots/Prediction_rnn_{j}.png", dpi=300)
+    
+
+print(nmse_lstm,nmse_gru,nmse_rnn)
 
 
 criterion = NMSELoss()

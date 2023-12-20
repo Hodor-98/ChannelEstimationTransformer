@@ -36,12 +36,31 @@ def real2complex(data):
     data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
     return data2
 
+def noise(H, SNR):
+    
+    sigma = 10 ** (- SNR / 10) 
+    # Generate complex Gaussian noise with PyTorch
+    real_part = torch.randn(*H.shape)
+    imag_part = torch.randn(*H.shape)
+    noise = np.sqrt(sigma / 2) * (real_part + 1j * imag_part)
+
+    # Normalize the noise
+    noise = noise * torch.sqrt(torch.mean(torch.abs(H) ** 2))
+    
+
+    return H + noise
+
+def channelnorm(H):
+    H = H / torch.sqrt(torch.mean(np.abs(H)**2))
+    return H
+
 
 class SeqData(Dataset):
     def __init__(self, dataset_name, seq_len, pred_len, SNR = 14):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.length =seq_len+pred_len
+        self.SNR = SNR
         
         with open(dataset_name, 'rb') as handle:
             self.dataset = pickle.load(handle)
@@ -59,6 +78,10 @@ class SeqData(Dataset):
         
         start = np.random.randint(0, T-L+1) 
         end = start + L
+        
+        # H = channelnorm(H)
+        
+        # H = noise(H, self.SNR)
         
         H = H[:, start:end, ...]
         H_pred = H[:,self.seq_len:,...]

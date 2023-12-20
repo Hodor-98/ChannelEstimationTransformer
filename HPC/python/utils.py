@@ -185,15 +185,15 @@ def train(model: torch.nn.Module, optimizer, scheduler, epoch, dataloader,device
     batch = next(iter(dataloader))
     for itr in range(dataloader.batch_size):
         H, H_seq, H_pred = [tensor[itr] for tensor in batch]
-        
+        print(device)
         data  = LoadBatch(H)
         data = data.to(device)
         
         output = model.train_data(data, device)
         loss = criterion(data[:,-15:,...], output[:,-15:,...])
         
-        outputs_plot_test = real2complex(np.array(output.detach().cpu()))
-        data_plot = real2complex(np.array(data.detach().cpu()))
+        # outputs_plot_test = real2complex(np.array(output.detach().cpu()))
+        # data_plot = real2complex(np.array(data.detach().cpu()))
         
         # if( itr < 10):
         #     plt.figure()

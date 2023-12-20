@@ -46,7 +46,7 @@ if (torch.cuda.is_available() and use_gpu):
 # Initialize and run training loop with SeqData DataLoader
 trainDatasetName = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 trainData =  SeqData(trainDatasetName, seq_len+15, pred_len)
-trainerLoader = DataLoader(dataset = trainData, batch_size = 512*4, shuffle = True,  
+trainerLoader = DataLoader(dataset = trainData, batch_size = 512*16, shuffle = True,  
                           num_workers = 4, drop_last = False, pin_memory = True)
 
 
@@ -57,12 +57,13 @@ EvaluaterLoader = DataLoader(evaluateData, batch_size=8, shuffle=True)
 
 lstm = LSTM(enc_in, enc_in, hs, hl)
 
-model_dict_name  = f"TrainedTransformers/{lstm.__class__.__name__}_enc{enc_in}_hs{hs}_hl{hl}_seq{seq_len}_label{label_len}_best_model_params_V{speed}_{direction}.pt"
+model_dict_name  = f"TrainedTransformers/{lstm.__class__.__name__}_{channel_model}_enc{enc_in}_hs{hs}_hl{hl}_seq{seq_len}_label{label_len}_best_model_params_V{speed}_{direction}.pt"
 
 if os.path.exists(model_dict_name):
     if (torch.cuda.is_available() and use_gpu):
         lstm.load_state_dict(torch.load(model_dict_name, map_location="cuda"))
         lstm = lstm.cuda()
+        print("GPU")
     else:
         lstm.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     print("Model loaded successfully!")

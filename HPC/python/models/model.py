@@ -361,7 +361,11 @@ class GRU(nn.Module):
 
     def train_data(self, x, device):
         
+        print(device)
+        
+        
         BATCH_SIZE, seq_len, _ = x.shape
+        x = x.to(device)
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 
         outputs = [x[:,0:1,...].permute(1,0,2).contiguous()]
         for idx in range(seq_len-1):
@@ -448,6 +452,7 @@ class LSTM(nn.Module):
         return outputs
 
     def test_data(self, x, pred_len,device):
+        
         
         BATCH_SIZE, seq_len, _ = x.shape
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 

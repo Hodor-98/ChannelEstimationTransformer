@@ -56,7 +56,7 @@ def channelnorm(H):
 
 
 class SeqData(Dataset):
-    def __init__(self, dataset_name, seq_len, pred_len, SNR = 14):
+    def __init__(self, dataset_name, seq_len, pred_len, SNR = 20):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.length =seq_len+pred_len
@@ -79,9 +79,9 @@ class SeqData(Dataset):
         start = np.random.randint(0, T-L+1) 
         end = start + L
         
-        # H = channelnorm(H)
+        H = channelnorm(H)
         
-        # H = noise(H, self.SNR)
+        H = noise(H, self.SNR)
         
         H = H[:, start:end, ...]
         H_pred = H[:,self.seq_len:,...]

@@ -361,9 +361,6 @@ class GRU(nn.Module):
 
     def train_data(self, x, device):
         
-        print(device)
-        
-        
         BATCH_SIZE, seq_len, _ = x.shape
         x = x.to(device)
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 

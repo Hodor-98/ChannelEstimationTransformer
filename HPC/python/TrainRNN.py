@@ -61,12 +61,12 @@ model_dict_name  = f"TrainedTransformers/{rnn.__class__.__name__}_{channel_model
 
 if os.path.exists(model_dict_name):
     if (torch.cuda.is_available() and use_gpu):
-        rnn.load_state_dict(torch.load(model_dict_name, map_location="cuda"))
-        rnn = rnn.cuda()
+        rnn.load_state_dict(torch.load(model_dict_name, map_location="cuda:0"))
     else:
         rnn.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     print("Model loaded successfully!")
 else:
     print(f"File '{model_dict_name}' does not exist. Creating a new model.")
-        
+
+rnn = rnn.cuda() if use_gpu else rnn 
 train_loop(rnn, trainerLoader, EvaluaterLoader, epochs, lr, model_dict_name ,device)

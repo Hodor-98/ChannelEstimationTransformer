@@ -185,7 +185,6 @@ def train(model: torch.nn.Module, optimizer, scheduler, epoch, dataloader,device
     batch = next(iter(dataloader))
     for itr in range(dataloader.batch_size):
         H, H_seq, H_pred = [tensor[itr] for tensor in batch]
-        print(device)
         data  = LoadBatch(H)
         data = data.to(device)
         

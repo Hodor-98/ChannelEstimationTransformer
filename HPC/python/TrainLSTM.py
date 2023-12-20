@@ -61,13 +61,12 @@ model_dict_name  = f"TrainedTransformers/{lstm.__class__.__name__}_{channel_mode
 
 if os.path.exists(model_dict_name):
     if (torch.cuda.is_available() and use_gpu):
-        lstm.load_state_dict(torch.load(model_dict_name, map_location="cuda"))
-        lstm = lstm.cuda()
-        print("GPU")
+        lstm.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     else:
         lstm.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     print("Model loaded successfully!")
 else:
     print(f"File '{model_dict_name}' does not exist. Creating a new model.")
-        
+
+rnn = lstm.cuda() if use_gpu else lstm 
 train_loop(lstm, trainerLoader, EvaluaterLoader, epochs, lr, model_dict_name ,device)

@@ -61,12 +61,12 @@ model_dict_name  = f"TrainedTransformers/{gru.__class__.__name__}_{channel_model
 
 if os.path.exists(model_dict_name):
     if (torch.cuda.is_available() and use_gpu):
-        gru.load_state_dict(torch.load(model_dict_name, map_location="cuda"))
-        gru = gru.cuda()
+        gru.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     else:
         gru.load_state_dict(torch.load(model_dict_name, map_location="cpu"))
     print("Model loaded successfully!")
 else:
     print(f"File '{model_dict_name}' does not exist. Creating a new model.")
-        
+    
+gru = gru.cuda() if use_gpu else gru 
 train_loop(gru, trainerLoader, EvaluaterLoader, epochs, lr, model_dict_name ,device)

@@ -81,9 +81,12 @@ def NMSE_cuda(x_hat, x):
     # power = torch.sum(x_real**2 + x_imag**2, 1)
     # mse = torch.sum((x_real-x_hat_real)**2 + (x_imag-x_hat_imag)**2, 1)
     # nmse = mse/power
-    power = torch.sum(x**2)
+    power = torch.sum(x_hat**2)
     mse = torch.sum((x-x_hat)**2)
+    # print("power", power)
+    # print("mse",mse)
     nmse = mse/power
+    # print("nmse",nmse)
     return nmse
     
 class NMSELoss(nn.Module):
@@ -98,3 +101,4 @@ class NMSELoss(nn.Module):
         else:
             nmse = torch.sum(nmse)
         return nmse
+    

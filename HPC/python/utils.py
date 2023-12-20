@@ -2,10 +2,12 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 import os 
-import time 
 import torch
+import time 
+import math
 from scipy.fftpack import fft, ifft 
 from scipy.interpolate import interp1d
+from metrics import NMSELoss
 pi = np.pi
 
 # def get_rate(H, sigma2):
@@ -138,6 +140,146 @@ def get2DDFT(Nx, Ny):
     return A
 
 
+
+# Check GPU memory
+def check_gpu_memory(use_gpu):
+    if (torch.cuda.is_available() and use_gpu):
+        current_device = torch.cuda.current_device()
+        gpu = torch.cuda.get_device_properties(current_device)
+        print(f"GPU Name: {gpu.name}")
+        print(f"GPU Memory Total: {gpu.total_memory / 1024**2} MB")
+        print(f"GPU Memory Free: {torch.cuda.memory_allocated(current_device) / 1024**2} MB")
+        print(f"GPU Memory Used: {torch.cuda.memory_reserved(current_device) / 1024**2} MB")
+    else:
+        print("No GPU available.")
+
+# Force cuDNN initialization
+def force_cudnn_initialization():
+    s = 32
+    dev = torch.device('cuda:0')
+    torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
+
+def LoadBatch(H):
+    '''
+    H: T * M * Nr * Nt
+    ''' 
+    M, T, Nr, Nt = H.shape 
+    H = H.reshape([M, T, Nr * Nt])
+    H_real = np.zeros([M, T, Nr * Nt, 2])
+    H_real[:,:,:,0] = H.real 
+    H_real[:,:,:,1] = H.imag 
+    H_real = H_real.reshape([M, T, Nr*Nt*2])
+    H_real = torch.tensor(H_real, dtype = torch.float32)
+    return H_real
+
+
+
+
+# Function to train the model using SeqData DataLoader
+def train(model: torch.nn.Module, optimizer, scheduler, epoch, dataloader,device) -> None:
+    model.train()
+    total_loss = 0.
+    criterion = NMSELoss()
+    start_time = time.time()
+    
+    batch = next(iter(dataloader))
+    for itr in range(dataloader.batch_size):
+        H, H_seq, H_pred = [tensor[itr] for tensor in batch]
+        
+        data  = LoadBatch(H)
+        data = data.to(device)
+        
+        output = model.train_data(data, device)
+        loss = criterion(data[:,-15:,...], output[:,-15:,...])
+        
+        outputs_plot_test = real2complex(np.array(output.detach().cpu()))
+        data_plot = real2complex(np.array(data.detach().cpu()))
+        
+        # if( itr < 10):
+        #     plt.figure()
+        #     plt.plot(data_plot[0,:,0])
+        #     plt.plot(outputs_plot_test[0,:,0], linestyle='--')
+        #     plt.savefig(f"ChannelPredictionPlots/Prediction_{model.__class__.__name__}_{itr}_temp.png", dpi=300)
+        #     plt.close()
+            
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
+        optimizer.step()
+
+        total_loss += loss.item()
+        if itr   % (dataloader.batch_size // 8) == 0 and itr > 0:
+            lr = scheduler.get_last_lr()[0]
+            ms_per_batch = (time.time() - start_time) * 1000 / (dataloader.batch_size // 8)
+            cur_loss = total_loss / (dataloader.batch_size // 8)
+            ppl = math.exp(cur_loss)
+
+            print(f'| epoch {epoch:3d} | {itr:5d}/{dataloader.batch_size:5d} batches | '
+                f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+                f'loss {cur_loss:5.4f} | ppl {ppl:8.2f}', flush=True)
+            total_loss = 0
+            start_time = time.time()
+
+def evaluate(model, evaluaterLoader,device):
+    model.eval()  # turn on evaluation mode
+    total_loss = 0.
+    criterion = NMSELoss()
+    
+    with torch.no_grad():
+        batch = next(iter(evaluaterLoader))
+                    
+        for itr in range(evaluaterLoader.batch_size):
+            H, H_seq, H_pred = [tensor[itr] for tensor in batch]
+            
+            data, label = LoadBatch(H_seq), LoadBatch(H_pred)
+            label = label.to(device)
+            enc_inp = data.to(device)
+
+
+            output = model.test_data(enc_inp, H_pred.shape[1], device)
+            
+            total_loss =  criterion(label, output)
+
+            outputs_plot_test = real2complex(np.array(output.detach().cpu()))
+            
+            # print(outputs_plot_test.shape)
+            # print(H.shape)
+                
+            x = np.array(list(range(H.shape[1])))
+            
+            plt.figure()
+            for i in range(4):
+                plt.subplot(2,2,i+1)
+                plt.plot(x[-H_pred.shape[1]:],outputs_plot_test[0,:,i*2].real)
+                plt.plot(H[0,:,i,0].real, linestyle='--')
+            plt.savefig(f"ChannelPredictionPlots/Prediction_{model.__class__.__name__}_{itr}.png", dpi=300)
+            plt.close()
+        
+    return total_loss
+
+
+# Function to run the training loop using SeqData DataLoader
+def train_loop(model: torch.nn.Module, trainerLoader, evaluaterLoader, epochs, lr, model_dict_name,device):
+    best_val_loss = float('inf')
+
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, gamma=0.95)
+    
+    for epoch in range(1, epochs + 1):
+        epoch_start_time = time.time()
+        train(model, optimizer, scheduler, epoch, trainerLoader,device)
+        val_loss = evaluate(model, evaluaterLoader,device)  # You should modify evaluate() to use SeqData DataLoader for validation as well
+        val_ppl = math.exp(val_loss)
+        elapsed = time.time() - epoch_start_time
+        print('-' * 89)
+        print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+              f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
+        print('-' * 89, flush=True)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), model_dict_name)
+
+        scheduler.step()
 
 
 

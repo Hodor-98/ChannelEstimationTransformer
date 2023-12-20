@@ -20,9 +20,10 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
     
 speed = 30
 lr = 1  # learning rate
-epochs = 50
+epochs = 20
 direction = 'uplink'
 num_batches = 10
+channel_model = "CDLBFixedDirection"
 
 
 enc_in = 16
@@ -45,6 +46,37 @@ output_attention = True
 distil = True
 device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu') 
 use_gpu = True
+
+# Define parameter names and values
+parameters = [
+    ("Encoder Input Size (enc_in)", enc_in),
+    ("Decoder Input Size (dec_in)", dec_in),
+    ("Output Size (c_out)", c_out),
+    ("Sequence Length (seq_len)", seq_len),
+    ("Label Length (label_len)", label_len),
+    ("Prediction Length (pred_len)", pred_len),
+    ("Scaling Factor (factor)", factor),
+    ("Model Dimension (d_model)", d_model),
+    ("Number of Attention Heads (n_heads)", n_heads),
+    ("Encoder Layers (e_layers)", e_layers),
+    ("Decoder Layers (d_layers)", d_layers),
+    ("Feed-Forward Dimension (d_ff)", d_ff),
+    ("Dropout Probability (dropout)", dropout),
+    ("Attention Mechanism (attn)", attn),
+    ("Embedding Type (embed)", embed),
+    ("Activation Function (activation)", activation),
+    ("Output Attention? (output_attention)", output_attention),
+    ("Distillation Used? (distil)", distil),
+    ("Channel Model", channel_model),
+]
+
+# Calculate the maximum width for alignment
+max_width = max(len(name) for name, _ in parameters) + 5
+
+# Print the table
+print("Transformer Model Configuration:")
+for name, value in parameters:
+    print(f"{name.ljust(max_width)}{value}")
 
 
 # Check GPU memory i.e how much memory is there, how much is free
@@ -103,20 +135,20 @@ device_ids = [i for i in range(torch.cuda.device_count())]
 
 
 
-model_dict_name = f"TrainedTransformers/{model.__class__.__name__}_best_model_params_V{speed}_{direction}.pt"
-
+model_dict_name = f"TrainedTransformers/{model.__class__.__name__}_{channel_model}_{factor}x_d_model{d_model}_n_heads{n_heads}_e_layers{e_layers}_d_layers{d_layers}_d_ff{d_ff}_dropout{dropout}_attn_{attn}_embed_{embed}_activation_{activation}_enc_in{enc_in}_dec_in{dec_in}_c_out{c_out}_seq_len{seq_len}_label_len{label_len}_pred_len{pred_len}_output_attention{output_attention}_distil{distil}_{direction}.pt"
  
 if os.path.exists(model_dict_name):
     if (torch.cuda.is_available() and use_gpu):
-        state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cuda'))
+        state_dict = torch.load(model_dict_name,map_location=torch.device('cuda'))
         state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
         model.load_state_dict(state_dict)
+        print("Model loaded successfully!")
     else:
-        state_dict = torch.load(f"TrainedTransformers/best_model_params_V{speed}_{direction}.pt",map_location=torch.device('cpu'))
+        state_dict = torch.load(model_dict_name,map_location=torch.device('cpu'))
         state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
         print("Model loaded successfully!")
 else:
-    print(f"File '{model_dict_name}' does not exist. Creating a new model.")
+    print(f"Model does not yet exist! Creating new model")
 
 model = torch.nn.DataParallel( model ).cuda() if torch.cuda.is_available() else model 
 
@@ -143,10 +175,10 @@ def real2complex(data):
     data2 = data2[:,:,:,0] + 1j * data2[:,:,:,1]
     return data2
 
-dataset_name = f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
+dataset_name = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
 testData =  SeqData(dataset_name, seq_len, pred_len)
-test_loader = DataLoader(dataset = testData, batch_size = 512*8, shuffle = True,  
-                          num_workers = 4., drop_last = False, pin_memory = True) 
+test_loader = DataLoader(dataset = testData, batch_size = 512*16, shuffle = True,  
+                          num_workers = 4, drop_last = False, pin_memory = True) 
 
 def train(model: nn.Module) -> None:
     model.train()  # turn on train mode
@@ -157,7 +189,7 @@ def train(model: nn.Module) -> None:
 
         
     log_interval = test_loader.batch_size/8
-    for batch, i in enumerate(range(test_loader.batch_size)):
+    for batch, i in enumerate(range(test_loader.batch_size-1)):
 
         
         H, H_seq, H_pred = testData[batch]
@@ -173,7 +205,7 @@ def train(model: nn.Module) -> None:
         dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
     
         output = model(enc_inp,dec_inp)[0]
-        loss = criterion(output, label)
+        loss = criterion(label,output)
         # print(MSELoss(output,label).item())
         # loss = MSELoss(output,label)
 
@@ -200,24 +232,38 @@ def evaluate(model):
     model.eval()  # turn on evaluation mode
     total_loss = 0.
     with torch.no_grad():
-        with open(f'GeneratedChannels/ChannelCDLB_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
-            channel = pickle.load(handle)
-        channel = channel[0]
-        print(channel.shape)
+        with open(f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
+            channel_dataset = pickle.load(handle)
         
-        data, label = LoadBatch(channel[:, :25, :, :]), LoadBatch(channel[:, -5:, :, :])
-        
-        inp_net = data.to(device)
-        label = label.to(device)
+        total_loss = 0
+        for itr in range(channel_dataset.shape[0]):
+            channel = channel_dataset[itr]
+            
+            data, label = LoadBatch(channel[:, :seq_len, :, :]), LoadBatch(channel[:, seq_len:seq_len+pred_len, :, :])
+            
+            inp_net = data.to(device)
+            label = label.to(device)
 
-        enc_inp = inp_net
-        dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(device)
-        dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
-        seq_len_temp = data.size(0)
-        output = model(enc_inp,dec_inp)[0]
-        total_loss += seq_len_temp * criterion(output, label).item()
+            enc_inp = inp_net
+            dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(device)
+            dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
+            output = model(enc_inp,dec_inp)[0]
+
+            total_loss += criterion(label,output).item()
+            
+            outputs_plot_validate = real2complex(np.array(output.detach().cpu()))
+            x = np.array(list(range(seq_len+pred_len)))
+            
+            plt.figure()
+            for i in range(4):
+                plt.subplot(2,2,i+1)
+                plt.plot(x[-pred_len:],outputs_plot_validate[0,:,i*2].real)
+                # plt.plot(x,data[0,:,i].real, linestyle='--')
+                plt.plot(x,channel[0,:seq_len+pred_len,i,0].real, linestyle='--')
+            plt.savefig(f"ChannelPredictionPlots/{channel_model}_Prediction_{model.__class__.__name__}_{itr}.png", dpi=300)
+            plt.close()
         
-    return total_loss / (channel.size(0) - 1)
+    return total_loss/itr
  
 
 best_val_loss = float('inf')

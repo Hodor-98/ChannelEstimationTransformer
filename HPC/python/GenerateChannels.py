@@ -90,7 +90,7 @@ speed = 30/3.6            # UT speed [m/s]. BSs are always assumed to be fixed.
                       # The direction of travel will chosen randomly within the x-y plane.
                       
                       
-number_of_slots = 50
+
 
 
 
@@ -103,8 +103,11 @@ print(rg.num_time_samples)
 l_min, l_max = time_lag_discrete_time_channel(rg.bandwidth)
 l_tot = l_max-l_min+1
 
-batch_size = 2
-num_of_batches = 10
+
+number_of_slots = 50
+validation_size = 8
+batch_size = 8
+num_of_batches = 2048 + validation_size
 ebno_db = 30
 num_bits_per_symbol = 2 # QPSK modulation
 coderate = 0.5 # Code rate
@@ -148,8 +151,13 @@ for batch in range(num_of_batches):
             ChannelNP_batch = ChannelNP_subbatch
         else:
             ChannelNP_batch = np.append(ChannelNP_batch, ChannelNP_subbatch, axis=0) 
-
+            
     if(batch == 0):
+        ChannelNP_Validate = np.expand_dims(ChannelNP_batch, axis=0)
+    elif(batch < validation_size):
+        ChannelNP_batch = np.expand_dims(ChannelNP_batch, axis=0)
+        ChannelNP_Validate = np.append(ChannelNP_Validate,ChannelNP_batch,axis=0)
+    elif(batch == validation_size):
         ChannelNP = np.expand_dims(ChannelNP_batch, axis=0)
     else:
         ChannelNP_batch = np.expand_dims(ChannelNP_batch, axis=0)
@@ -157,12 +165,15 @@ for batch in range(num_of_batches):
 
 
     # Stack the real and imaginary parts along the last dimension
+    if(batch < validation_size):
+        ChannelPyTorch_Validate = torch.from_numpy(ChannelNP_Validate)
+    else:
+        ChannelPyTorch = torch.from_numpy(ChannelNP)
     
-    ChannelPyTorch = torch.from_numpy(ChannelNP)
+cdl_model = cdl_model+"FixedDirection"
+file = f'GeneratedChannels/ChannelCDL{cdl_model}_Tx{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}.pickle'
 
-file = f'GeneratedChannels/ChannelCDL{cdl_model}_S{number_of_slots}_{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}.pickle'
-
-print(f"Saving data with shape {ChannelPyTorch.size}")
+print(f"Saving database with shape {ChannelPyTorch.size}")
 
 # Check if the file exists
 try:
@@ -180,3 +191,13 @@ except FileNotFoundError:
     with open(file, 'wb') as handle:
         pickle.dump(ChannelPyTorch, handle)
     print("File created with new data.")
+
+
+    
+file = f'GeneratedChannels/ChannelCDL{cdl_model}_Tx{num_bs_ant}_Rx{num_ut_ant}_DS{delay_spread}_V{int(speed*3.6)}_{direction}__validate.pickle'
+
+print(f"Writing validation data with shape {ChannelPyTorch_Validate.shape}")
+
+with open(file, 'wb') as handle:
+    pickle.dump(ChannelPyTorch_Validate, handle)
+print("File created with new data.")

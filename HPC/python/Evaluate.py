@@ -58,7 +58,7 @@ gru = GRU(enc_in, enc_in, hs, hl)
 state_dict = torch.load(f"TrainedTransformers/{transformer.__class__.__name__}_best_model_params_V{speed}_{direction}.pt", map_location=torch.device('cpu'))
 state_dict = {k[len('module.'):]: v for k, v in state_dict.items()}
 transformer.load_state_dict(state_dict)
-transformer = torch.nn.DataParallel( lstm ).cuda() if use_gpu else transformer 
+transformer = torch.nn.DataParallel( transformer ).cuda() if use_gpu else transformer 
 print("transformer has been loaded!")
 
 # load LSTM 

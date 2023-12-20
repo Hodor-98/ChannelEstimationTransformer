@@ -286,8 +286,8 @@ class RNN(nn.Module):
         
         BATCH_SIZE, seq_len, _ = x.shape
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 
-        outputs = []
-        for idx in range(seq_len):
+        outputs = [x[:,0:1,...].permute(1,0,2).contiguous()]
+        for idx in range(seq_len-1):
             output, prev_hidden= self.model(x[:,idx:idx+1,...].permute(1,0,2).contiguous(), prev_hidden)
             outputs.append(output)
         outputs = torch.cat(outputs, dim = 0).permute(1,0,2).contiguous()
@@ -363,8 +363,8 @@ class GRU(nn.Module):
         
         BATCH_SIZE, seq_len, _ = x.shape
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 
-        outputs = []
-        for idx in range(seq_len):
+        outputs = [x[:,0:1,...].permute(1,0,2).contiguous()]
+        for idx in range(seq_len-1):
             output, prev_hidden= self.model(x[:,idx:idx+1,...].permute(1,0,2).contiguous(), prev_hidden)
             outputs.append(output)
         outputs = torch.cat(outputs, dim = 0).permute(1,0,2).contiguous()
@@ -439,16 +439,11 @@ class LSTM(nn.Module):
         BATCH_SIZE, seq_len, _ = x.shape
         prev_hidden = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 
         prev_cell = torch.zeros(self.num_layers, BATCH_SIZE,  self.hidden_size).to(device) 
-        outputs = []
-        for idx in range(seq_len):
-            if idx<25 or not idx % 2:
-                output, prev_hidden, prev_cell = self.model(x[:,idx:idx+1,...].permute(1,0,2).contiguous(), prev_hidden, prev_cell)
-            else:
-                output, prev_hidden, prev_cell = self.model(output,  prev_hidden, prev_cell) 
+        outputs = [x[:,0:1,...].permute(1,0,2).contiguous()]
+        for idx in range(seq_len-1):
+            output, prev_hidden, prev_cell = self.model(x[:,idx:idx+1,...].permute(1,0,2).contiguous(), prev_hidden, prev_cell)
             outputs.append(output)
         outputs = torch.cat(outputs, dim = 0).permute(1,0,2).contiguous()
-        
-        
 
         return outputs
 
@@ -461,13 +456,15 @@ class LSTM(nn.Module):
         for idx in range(seq_len + pred_len - 1):
             if idx < seq_len:
                 output, prev_hidden, prev_cell = self.model(x[:,idx:idx+1,...].permute(1,0,2).contiguous(), prev_hidden, prev_cell)
+
             else:
-                output, prev_hidden, prev_cell = self.model(output,  prev_hidden, prev_cell) 
-            # if idx >= seq_len - 1:
-            outputs.append(output)
-            if idx == 25 or idx==26:
-                print(output[0,0,0], prev_hidden[0,0,0], prev_cell[0,0,0]) 
-            print(output.shape)
+                output, prev_hidden, prev_cell = self.model(output,  prev_hidden, prev_cell)
+                # print("unknown")
+            if idx >= seq_len - 1:
+                outputs.append(output)
+            # print(x[0,idx:idx+1,0])
+            # print(output[:,0,0])
+            # print(output[:,0,0].shape)
         outputs = torch.cat(outputs, dim = 0).permute(1,0,2).contiguous()
 
 

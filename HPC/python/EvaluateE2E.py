@@ -258,6 +258,8 @@ class Model(tf.keras.Model):
 
     @tf.function(jit_compile=True) # See the following guide: https://www.tensorflow.org/guide/function
     def call(self, batch_size, ebno_db):
+        
+        number_of_slots = 50
 
         no = ebnodb2no(ebno_db, self._num_bits_per_symbol, self._coderate, self._rg)
         b = self._binary_source([batch_size, 1, self._num_streams_per_tx, self._k])
@@ -266,7 +268,7 @@ class Model(tf.keras.Model):
         x_rg = self._rg_mapper(x)
 
         # Time-domain simulations
-        a, tau = self._cdl(batch_size, self._rg.num_time_samples+self._l_tot-1, self._rg.bandwidth)
+        a, tau = self._cdl(batch_size, self._rg.num_time_samples*number_of_slots+self._l_tot-1, self._rg.bandwidth)
         h_time = cir_to_time_channel(self._rg.bandwidth, a, tau,
                                         l_min=self._l_min, l_max=self._l_max, normalize=True)
 
@@ -274,8 +276,10 @@ class Model(tf.keras.Model):
         # the path gains `a` to the OFDM symbol rate prior to converting the CIR
         # to the channel frequency response.
         a_freq = a[...,self._rg.cyclic_prefix_length:-1:(self._rg.fft_size+self._rg.cyclic_prefix_length)]
-        a_freq = a_freq[...,:self._rg.num_ofdm_symbols]
+        a_freq = a_freq[...,:self._rg.num_ofdm_symbols*number_of_slots]
         h_freq = cir_to_ofdm_channel(self._frequencies, a_freq, tau, normalize=True)
+        print(h_time.shape)
+        print(h_freq.shape)
 
         if self._direction == "downlink":
             x_rg, g = self._zf_precoder([x_rg, h_freq])
@@ -287,17 +291,18 @@ class Model(tf.keras.Model):
 
         if(self._channel_estimation == "Transformer"):
            
-           data = LoadBatch(channel[:, :25, :, :])
+            # data = LoadBatch(h_freq[:, :25, :, :])
 
+            # inp_net = data.to(self._device)
 
-            inp_net = data.to(self._device)
+            # enc_inp = inp_net
+            # dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(self._device)
+            # dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
 
-            enc_inp = inp_net
-            dec_inp =  torch.zeros_like( enc_inp[:, -pred_len:, :] ).to(self._device)
-            dec_inp =  torch.cat([enc_inp[:, seq_len - label_len:seq_len, :], dec_inp], dim=1)
-
-            # informer
-            outputs_informer = self._transformer(enc_inp, dec_inp)[0]
+            # # informer
+            # outputs_informer = self._transformer(enc_inp, dec_inp)[0]
+            
+            print("temp")
            
         else:
             if self._perfect_csi:
@@ -323,7 +328,7 @@ UL_SIMS = {
     "direction" : "uplink",
     "perfect_csi" : True,
     "speed" : 30,
-    "channel_estimation": "Transformer",
+    "channel_estimation": "Transformere",
     "cyclic_prefix_length" : 6,
     "pilot_ofdm_symbol_indices" : [2, 11],
     "ber" : [],

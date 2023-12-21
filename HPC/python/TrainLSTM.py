@@ -18,6 +18,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 # Constants
 speed = 30
 lr = 1  # learning rate
+SNR = 30
 epochs = 10
 direction = 'uplink'
 max_batches = 2 ** 30
@@ -45,14 +46,14 @@ if (torch.cuda.is_available() and use_gpu):
 
 # Initialize and run training loop with SeqData DataLoader
 trainDatasetName = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
-trainData =  SeqData(trainDatasetName, seq_len+15, pred_len)
+trainData =  SeqData(trainDatasetName, seq_len+15, pred_len, SNR=SNR)
 trainerLoader = DataLoader(dataset = trainData, batch_size = 512*16, shuffle = True,  
                           num_workers = 4, drop_last = False, pin_memory = True)
 
 
 
 evaluateDatasetName = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle'
-evaluateData =  SeqData(evaluateDatasetName, seq_len, pred_len)
+evaluateData =  SeqData(evaluateDatasetName, seq_len, pred_len, SNR=SNR)
 EvaluaterLoader = DataLoader(evaluateData, batch_size=8, shuffle=True)
 
 lstm = LSTM(enc_in, enc_in, hs, hl)

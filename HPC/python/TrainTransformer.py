@@ -17,7 +17,7 @@ from metrics import NMSELoss, Adap_NMSELoss
 from data import SeqData
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
-    
+SNR = 15
 speed = 30
 lr = 1  # learning rate
 epochs = 20
@@ -176,9 +176,13 @@ def real2complex(data):
     return data2
 
 dataset_name = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}.pickle'
-testData =  SeqData(dataset_name, seq_len, pred_len)
+testData =  SeqData(dataset_name, seq_len, pred_len, SNR=SNR)
 test_loader = DataLoader(dataset = testData, batch_size = 512*16, shuffle = True,  
                           num_workers = 4, drop_last = False, pin_memory = True) 
+
+evaluateDatasetName = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle'
+evaluateData =  SeqData(evaluateDatasetName, seq_len, pred_len, SNR=SNR)
+EvaluaterLoader = DataLoader(evaluateData, batch_size=8, shuffle=True)
 
 def train(model: nn.Module) -> None:
     model.train()  # turn on train mode
@@ -211,7 +215,7 @@ def train(model: nn.Module) -> None:
 
         optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
         optimizer.step()
 
         total_loss += loss.item()
@@ -232,14 +236,13 @@ def evaluate(model):
     model.eval()  # turn on evaluation mode
     total_loss = 0.
     with torch.no_grad():
-        with open(f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle', 'rb') as handle:
-            channel_dataset = pickle.load(handle)
+        batch = next(iter(EvaluaterLoader))
         
         total_loss = 0
-        for itr in range(channel_dataset.shape[0]):
-            channel = channel_dataset[itr]
+        for itr in range(EvaluaterLoader.batch_size):
+            H, H_seq, H_pred = [tensor[itr] for tensor in batch]
             
-            data, label = LoadBatch(channel[:, :seq_len, :, :]), LoadBatch(channel[:, seq_len:seq_len+pred_len, :, :])
+            data, label = LoadBatch(H_seq), LoadBatch(H_pred)
             
             inp_net = data.to(device)
             label = label.to(device)
@@ -259,7 +262,7 @@ def evaluate(model):
                 plt.subplot(2,2,i+1)
                 plt.plot(x[-pred_len:],outputs_plot_validate[0,:,i*2].real)
                 # plt.plot(x,data[0,:,i].real, linestyle='--')
-                plt.plot(x,channel[0,:seq_len+pred_len,i,0].real, linestyle='--')
+                plt.plot(x,H[0,:seq_len+pred_len,i,0].real, linestyle='--')
             plt.savefig(f"ChannelPredictionPlots/{channel_model}_Prediction_{model.__class__.__name__}_{itr}.png", dpi=300)
             plt.close()
         

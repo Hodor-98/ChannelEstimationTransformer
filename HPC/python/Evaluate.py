@@ -112,7 +112,7 @@ NMSE8 = np.zeros(pred_len + 1)
 criterion = NMSELoss() 
 
 evaluateDatasetName = f'GeneratedChannels/Channel{channel_model}_Tx4_Rx2_DS1e-07_V{speed}_{direction}__validate.pickle'
-evaluateData =  SeqData(evaluateDatasetName, seq_len, pred_len)
+evaluateData =  SeqData(evaluateDatasetName, seq_len, pred_len, SNR=40)
 EvaluaterLoader = DataLoader(evaluateData, batch_size=8, shuffle=False)
 
 
@@ -212,5 +212,17 @@ plt.legend(['Transformer', 'LSTM', 'GRU', 'RNN'])
 plt.xlabel('SRS (0.625 ms)') 
 plt.ylabel('NMSE (dB)') 
 plt.savefig('NMSE.png', dpi = 300) 
+plt.close()
 
+plt.figure()
+x = np.array(list(range(seq_len+pred_len)))
+for i in range(4):
+    plt.subplot(2,2,i+1)
+    plt.plot(x,H[0,:,i,0].real)
+    plt.plot(x[-pred_len:],outputs_informer[0,:,i,0].real)
+    plt.plot(x[-pred_len:],outputs_lstm[0,:,i,0].real)
+    plt.plot(x[-pred_len:],outputs_gru[0,:,i,0].real)
+    plt.plot(x[-pred_len:],outputs_rnn[0,:,i,0].real)
+plt.savefig('Pred.png', dpi = 300)
+plt.close()
 print("DONE")
